@@ -1,4 +1,4 @@
-#upload176
+# upload 177
 
 import filecmp
 import os
@@ -213,6 +213,10 @@ def get_parent_id(head_id, wit_folder):
     return parent_id
 
 
+def get_parents_id(head_id, wit_folder):
+    return get_parent_id(head_id, wit_folder).split(',')
+
+
 def create_commit(msg_to_commit, wit_folder, is_merge):
     generated_commit_id = ''.join(random.choice(string.digits + string.ascii_lowercase[:6]) for _ in range(40))
     print('commit_id', generated_commit_id)
@@ -221,8 +225,6 @@ def create_commit(msg_to_commit, wit_folder, is_merge):
     update_branch = None
     branch_ref = get_branch_ref(active_branch, wit_folder)
     if head_id == branch_ref:
-        if is_merge:
-            return
         update_branch = active_branch
         modify_active_file(generated_commit_id, wit_folder)
     create_metadata_file(generated_commit_id, msg_to_commit, wit_folder, branch_ref, is_merge)
@@ -361,17 +363,14 @@ if sys.argv[1] == "branch":
 if sys.argv[1] == "merge":
     wit_folder = check_and_get_wit_folder()
     if wit_folder:
+        branch_name = sys.argv[2]
         head_id = get_head_id(wit_folder)
-        if is_folders_equal(head_id, wit_folder):
+        branch_ref = get_branch_ref(branch_name, wit_folder)
+        if head_id == branch_ref:
+            print('same head and branch, not need to merge')
+        elif is_folders_equal(head_id, wit_folder):
             print('merging')
-            branch_name = sys.argv[2]
             copy_branch_to_staging(get_branch_ref(branch_name, wit_folder), wit_folder)
             create_commit(f"Merging branch {branch_name}", wit_folder, True)
     else:
         print("not wit folder")
-
-if sys.argv[1] == "test":
-    wit_folder = check_and_get_wit_folder()
-    print(wit_folder)
-    if wit_folder:
-        print(wit_folder[:-5])
