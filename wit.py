@@ -49,7 +49,7 @@ def get_branch_ref(branch, wit_folder):
         with open(f"{wit_folder}/references.txt", "r") as file:
             result = re.search(f"{branch}=(.*)", file.read())
             if result is None:
-                return
+                return None
             branch_ref = result.group(1)
     return branch_ref
 
@@ -64,11 +64,14 @@ def get_master_id(wit_folder):
     return commit_id
 
 
-def create_metadata_file(commit_id, commit_msg, wit_folder):
+def create_metadata_file(commit_id, commit_msg, wit_folder, branch_ref, is_merge):
     parent = get_head_id(wit_folder)
     str_date = strftime("%a %b %d %H:%M:%S %Y +03:00", gmtime())
     with open(f"{wit_folder}/images/{commit_id}.txt", "w") as file:
-        file.write(f"parent={parent}\ndate={str_date}\nmessage={commit_msg}")
+        if branch_ref is not None and is_merge:
+            file.write(f"parent={parent},{branch_ref}\ndate={str_date}\nmessage={commit_msg}")
+        else:
+            file.write(f"parent={parent}\ndate={str_date}\nmessage={commit_msg}")
     file.close()
 
 
@@ -210,16 +213,19 @@ def get_parent_id(head_id, wit_folder):
     return parent_id
 
 
-def create_commit(msg_to_commit, wit_folder):
+def create_commit(msg_to_commit, wit_folder, is_merge):
     generated_commit_id = ''.join(random.choice(string.digits + string.ascii_lowercase[:6]) for _ in range(40))
     print('commit_id', generated_commit_id)
     active_branch = get_activate_branch(wit_folder)
     head_id = get_head_id(wit_folder)
     update_branch = None
-    if head_id == get_branch_ref(active_branch, wit_folder):
+    branch_ref = get_branch_ref(active_branch, wit_folder)
+    if head_id == branch_ref:
+        if is_merge:
+            return
         update_branch = active_branch
         modify_active_file(generated_commit_id, wit_folder)
-    create_metadata_file(generated_commit_id, msg_to_commit, wit_folder)
+    create_metadata_file(generated_commit_id, msg_to_commit, wit_folder, branch_ref, is_merge)
     set_references(generated_commit_id, wit_folder, update_branch=update_branch)
     copy_statging_area(generated_commit_id, wit_folder)
 
@@ -256,7 +262,7 @@ if sys.argv[1] == "commit":
     if wit_folder:
         try:
             commit_msg = sys.argv[2]
-            create_commit(commit_msg, wit_folder)
+            create_commit(commit_msg, wit_folder, False)
         except IndexError:
             print("dont forget commit msg")
     else:
@@ -310,9 +316,17 @@ if sys.argv[1] == "graph":
             dot.node('A', 'Head')
             dot.node('B', 'master')
             dot.node('C', head_id)
-            dot.node('D', parent_id)
             dot.edges(['AC', 'BC'])
-            dot.edge('C', 'D', constraint='false')
+            if parent_id.find(',') != -1:
+                print('aaa')
+                parents = parent_id.split(',')
+                dot.node('D', parents[0])
+                dot.node('E', parents[1])
+                dot.edge('C', 'D', constraint='false')
+                dot.edge('C', 'E', constraint='false')
+            else:
+                dot.node('D', parent_id)
+                dot.edge('C', 'D', constraint='false')
         else:
             parent_id = get_parent_id(head_id, wit_folder)
             print('hcil', parent_id)
@@ -320,10 +334,18 @@ if sys.argv[1] == "graph":
             dot.node('B', head_id)
             dot.edge('A', 'B', constraint='false')
             if parent_id != "None":
-                dot.node('D', parent_id)
-                dot.edge('B', 'D', constraint='false')
+                if parent_id.find(',') == 1:
+                    parents = parent_id.split()
+                    dot.node('D', parents[0])
+                    dot.node('E', parents[1])
+                    dot.edge('B', 'D', constraint='false')
+                    dot.edge('B', 'E', constraint='false')
+                else:
+                    print('az kan')
+                    dot.node('D', parent_id)
+                    dot.edge('B', 'D', constraint='false')
         print(dot.source)  # doctest: +NORMALIZE_WHITESPACE
-        dot.render('test-output/round-table.gv', view=True)  # doctest: +SKIP
+        dot.render('test-output/graph.gv', view=True)  # doctest: +SKIP
     else:
         print("not wit folder")
 
@@ -344,7 +366,7 @@ if sys.argv[1] == "merge":
             print('merging')
             branch_name = sys.argv[2]
             copy_branch_to_staging(get_branch_ref(branch_name, wit_folder), wit_folder)
-            create_commit(f"Merging branch {branch_name}", wit_folder)
+            create_commit(f"Merging branch {branch_name}", wit_folder, True)
     else:
         print("not wit folder")
 
